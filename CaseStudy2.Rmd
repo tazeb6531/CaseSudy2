@@ -1,20 +1,55 @@
 ---
-title: "CaseStudy2"
+title: "Case Study Two"
 author: "Tazeb"
-date: "11/17/2019"
+date: "11/15/2019"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE, echo=T}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 options(knitr.kable.NA = '', knitr.kable.booktabs=T)
 
+library(tidyverse) # auto includes ggplot2, readr, deplyr,tidyr etc
+library(ggthemes) # for themes in ggplot
+library(kableExtra) # library to make the document more presentable
+library(mice) # optional to impute ABV & IBU values
+library(class)
+library(caret)
+library(usmap) 
+library(highcharter)
+library(magrittr)
+library(ggmap)
+library(ggExtra)
+library(treemapify)
+library(maps)
+library(naniar)
+library(revealjs)
+library(htmltools)
+library(viridisLite)
+library(treemap)
+library(RColorBrewer)
+
 ```
 
-# Reading the dataset
+
 ``` {r}
 dataset <- read_csv('CaseStudy.csv', col_types = cols())
-names(dataset) [1] <- "Age"
-attach(dataset)
+
+```
+
+
+## Description of the attributes
+
+``` {r}
 str(dataset)
+
+```
+
+
+
+
+``` {r}
+
 ```
