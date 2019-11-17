@@ -1,0 +1,20 @@
+---
+title: "CaseStudy2"
+author: "Tazeb"
+date: "11/17/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=T}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+options(knitr.kable.NA = '', knitr.kable.booktabs=T)
+
+```
+
+# Reading the dataset
+``` {r}
+dataset <- read_csv('CaseStudy.csv', col_types = cols())
+names(dataset) [1] <- "Age"
+attach(dataset)
+str(dataset)
+```
