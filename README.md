@@ -4,3 +4,7 @@ Attrition in business can mean the reduction in staff and employees in a company
 
 The specific objective of this project is to predict if an employee is going to resign or not. 
 
+https://youtu.be/FAqR7_vUDRk
+
+
+
