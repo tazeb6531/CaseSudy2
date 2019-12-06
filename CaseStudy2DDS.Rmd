@@ -556,18 +556,18 @@ TotalWorkingYears                     45.96      12.72    3.61              0.00
 ## Conclusion
 This paper was motivated by the need for research that could reduce the attrition rate in an industry, therby incrementing the productivity. The unique contribution of this paper is that we investigated the attributes which majorly contribute in the attrition. We found that parameters such as Overtime, Gender, Previous Work Experience, Environmental Satisfaction are some of the parameters, which show strong association with attrition, positively or negatively.
 
+
+
 ##  Appendix : Online Resources
 
+
 https://www.analyticsvidhya.com/blog/2015/11/beginners-guide-on-logistic-regression-in-r/
-
 https://rpubs.com/bpr1989/HRAnalysis
-
 http://rpubs.com/SameerMathur/HTNF
-
 http://recruitloop.com/blog/7-ways-reduce-employee-attrition/
-
 https://rpubs.com/CJ_09/Emp_Attrition_Final
-
 Text book
-
 https://www.kaggle.com/pavansubhasht/ibm-hr-analytics-attrition-dataset/data
+
+
+### My youtube presentation: https://www.youtube.com/watch?v=vTFZVFQz2No 
