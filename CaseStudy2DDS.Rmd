@@ -1,0 +1,573 @@
+---
+title: " Employee Attrition Analysis"
+author: "Tazeb"
+date: "11/15/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+# Load necessary packages and ensure they are active
+load.lib = c("kableExtra","ggplot2","Amelia","pastecs","ROCR","reshape2","devtools","glmnet")
+install.lib = load.lib[!load.lib %in% installed.packages()]
+for(lib in install.lib){
+  install.packages(lib,dependencies=TRUE)
+} 
+sapply(load.lib,require,character=TRUE)
+knitr::opts_chunk$set(echo = TRUE)
+
+library(plyr)
+library(kableExtra) # to make uber sexy tables for output
+library(pastecs) # for easy descriptive statistics
+library(ROCR) # for ROC plots and AUC calculations
+library(glmnet)
+# turn off scientfic notation for the entire script
+# set precision of decimal place to 2
+options(scipen = 999, digits=2)
+library(tidyverse) # auto includes ggplot2, readr, deplyr,tidyr etc
+library(ggthemes) # for themes in ggplot
+library(kableExtra) # library to make the document more presentable
+library(mice) # optional to impute ABV & IBU values
+library(DT)          # For Data Tables
+library(lattice)     # The lattice add-on of Trellis graphics for R
+library(knitr)       # For Dynamic Report Generation in R 
+library(gplots)      # Various R Programming Tools for Plotting Data
+library(ggplot2)     # An Implementation of the Grammar of Graphics 
+library(ClustOfVar)  # Clustering of variables 
+library(ape)         # Analyses of Phylogenetics and Evolution (as.phylo) 
+library(Information) # Data Exploration with Information Theory (Weight-of-Evidence and Information Value)
+library(ROCR)        # Model Performance and ROC curve
+library(caret)       # Classification and Regression Training -  for any machine learning algorithms
+library(rpart)       # Recursive partitioning for classification, regression and survival trees
+library(rpart.utils) # Tools for parsing and manipulating rpart objects, including generating machine readable rules
+library(rpart.plot)  # Plot 'rpart' Models: An Enhanced Version of 'plot.rpart'
+library(randomForest)# Leo Breiman and Cutler's Random Forests for Classification and Regression 
+library(party)       # A computational toolbox for recursive partitioning - Conditional inference Trees
+library(bnlearn)     # Bayesian Network Structure Learning, Parameter Learning and Inference
+library(DAAG)        # Data Analysis and Graphics Data and Functions
+library(vcd)         # Visualizing Categorical Data
+library(kernlab) 
+library(plyr) # to change character to 1 and 0
+library(DALEX)
+library(caTools)
+library(class)
+library(e1071)
+library(DMwR)
+library(caretEnsemble)
+library(scales)
+library(magrittr)
+library(stringr)
+library(stringi)
+library(reader)
+library(pROC)
+library(gbm)
+library(reshape2)
+library(pastecs)
+library(corrplot)
+library(skimr)
+library(glmnet)
+library(ranger)
+
+options(scipen = 999, digits=2)
+```
+
+
+## Summary
+
+The specific objective of this project was to predict if an employee is going to resign or no by using the given dataset. In this project we use Logistic regression, KNN classification and Random forest regression  supervised machine learning techniques. I found intersting results with more than 85% Accuracy. In the result, Overtime, Gender, Previous Work Experience, Environmental Satisfaction are some of the parameters, which show strong association with attrition, positively or negatively.
+
+## Introduction
+Attrition in human resource is the gradual loss of employee over time. It has a problem that impacts all business, irrespective of geography, industry and size of the company. 
+Changes in management style, company structure, or other aspects of the company might cause employees to leave the company voluntarily, resulting in a higher attrition rate. Another possible cause of attrition is when a company eliminates a job completely. This case studuy try to address issues concerning the attrition of an employee with respect to several paramters. The project investigate how the general parameters like Education, Department, Monthly Income, monthlyIncome, OverTime and others impact the attrition of an employee. 
+
+## Objectivies
+
+The main goal of the analysis is to study the indicators of attrition in order to identify ways that the company can improve employee retention to save money and time spent in hiring and training.
+
+```{r, echo=TRUE}
+# load raw data
+dataset <- read.csv('CaseStudy2-data.csv', header=TRUE)
+```
+
+``` {r}
+skim(dataset)
+```
+
+
+### Data Cleanup and Conversion
+
+#### Checking for missing data values
+```{r}
+employee = dataset
+
+```
+
+```{r, echo=TRUE}
+# look for and drop columns with no variation
+drop_columns <- which(apply(employee, 2, function(x) (length(unique(x)) == 1)))
+cols <- names(drop_columns)
+employee <- employee[,-drop_columns]
+# find columns of class factor
+factor_columns <- names(which(sapply(names(employee),function(x) class(employee[[x]])=="factor")))
+# convert factors to numeric
+#employee$Attrition <- as.numeric(employee$Attrition)-1
+employee$DailyRate <- NULL
+employee$EmployeeNumber <- NULL
+employee$MonthlyRate <- NULL
+employee$HourlyRate <- NULL
+```
+
+
+```{r, echo=TRUE}
+# check for missing data values
+numNAs <- sum(apply(employee,2,is.na))
+```
+
+``` {r}
+dim(employee)
+
+```
+
+``` {r}
+names(employee)
+`````` 
+
+```{r}
+DT::datatable(employee[1:100,]) 
+```
+Looking the data type; it helps to manage and convert the data
+``` {r}
+str(employee)
+```
+
+Let us start by taking a look at the attrition percentage. 
+```{r}
+ggplot(employee,aes(Attrition,fill=Attrition))+geom_bar()
+```
+Histograms
+``` {r}
+hist(employee$Age,xlab="Age",ylab="count",breaks=20,main="Age variability in the company",col="lightblue",freq=FALSE)
+```
+
+```{r}
+# Histogram with normal curve for monthly income
+hist(employee$MonthlyIncome,xlab="MonthlyIncome",ylab="Frequency",breaks=10,main="MonthlyIncome",col="purple",ylim=c(0,400))
+```
+
+``` {r}
+hist(employee$YearsAtCompany,xlab="YearsAtCompany",ylab="count",breaks=20,main="YearsAtcompany",col="lightblue",ylim=c(0,400))
+```
+
+```{r}
+hist(employee$YearsWithCurrManager,xlab="YearswithCurManager",ylab="count",breaks=20,main="YearsWithCurManager",col="lightblue",ylim=c(0,400))
+```
+
+``` {r MannyEDA, echo=TRUE,fig.height = 16, fig.width = 10, fig.align="center"}
+# descriptive statistics, load into new data frame for processing
+descriptiveTable <- pastecs::stat.desc(employee)
+# remove non-numeric features
+charCols <- c("Attrition", "BusinessTravel", "Department", "EducationField", "Gender", "JobRole", "MaritalStatus", "OverTime")
+continuousTable.stats <- descriptiveTable[,!(colnames(descriptiveTable) %in% charCols)]
+categoricalTable <- employee[,(colnames(descriptiveTable) %in% charCols)]
+continuousTable <- employee[,!(colnames(employee) %in% charCols)]
+# remove rows for certain descriptive statistics leaving: N, Mean, Median, Std Dev, Var, Min, Max
+remove <- c("CI.mean.0.95", "nbr.val", "nbr.null", "nbr.na", "range", "sum", "SE.mean", "CI.mean", "coef.var")
+continuousTable.stats <- continuousTable.stats[-which(rownames(continuousTable.stats) %in% remove),]
+# round all numeric values to 2 decimal points
+continuousTable.stats <- round(continuousTable.stats, 2)
+continuousTable.transposed <- t(continuousTable.stats) # object becomes matrix
+
+# display descriptive statistics
+knitr::kable(continuousTable.transposed,caption = "Descriptive Statistics for Numeric Features in the Raw Employee Data", row.names = TRUE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover", "condensed", "responsive"), full_width = F)
+
+summary(categoricalTable)
+
+continuousTable$Attrition <- employee$Attrition
+continuousTable$EmployeeCount <- NULL
+continuousTable$EmployeeNumber <- NULL
+continuousTable$StandardHours <- NULL
+
+facetPlot <- melt(continuousTable, id.vars = "Attrition")
+
+p <- ggplot(data = facetPlot, aes(x = value, fill=Attrition)) + 
+    geom_histogram(bins = 10, colour = "black") + 
+    facet_wrap(~variable, scales = 'free', ncol = 4) + 
+    labs(title="Faceted Histograms for Continuous Variables", title_x="", title_y="") +
+    scale_fill_manual(values = c("blue","red")) 
+    
+p
+# the above ggplot doesn't seem to render correctly in RMarkdown, but it does in R Studio if you're curious. Therefore, we are displaying the result as a static image loaded from GitHub.
+```
+
+# Correlation Matrix
+``` {r}
+employee$Attrition <- as.numeric(employee$Attrition)-1
+cor_vars <- data.frame(employee$Attrition,employee$Age, employee$DistanceFromHome,employee$Education, employee$EnvironmentSatisfaction, employee$MonthlyIncome, employee$JobInvolvement , employee$JobLevel,employee$JobSatisfaction,employee$NumCompaniesWorked,employee$PerformanceRating,employee$PerformanceRating,employee$RelationshipSatisfaction,  employee$StockOptionLevel, employee$StockOptionLevel, employee$TotalWorkingYears,employee$TrainingTimesLastYear, employee$WorkLifeBalance, employee$YearsAtCompany, employee$YearsInCurrentRole, employee$YearsSinceLastPromotion, employee$YearsWithCurrManager)
+
+
+
+cor(cor_vars)
+trans<-cor(cor_vars)
+melted_cormat <- melt(trans)
+
+ ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+``` {r}
+employee %>% keep(is.numeric) %>% na.omit %>% cor %>% corrplot("upper", addCoef.col = "black",tl.col = "blue", number.digits = 2,
+			 number.cex = 0.5, method="square",
+			 order="hclust", title="Variable Corr Heatmap",
+			 tl.srt=50, tl.cex = 0.8)
+
+```
+
+High Correlation Results: having above 70% correlation
+
+* MonthlyIncome vs. JobLevel (95.16% correlation)
+* TotalWorkingYears vs. JobLevel (78.08% correlation)
+* MonthlyIncome vs. TotalWorkingYears (77.85% correlation)
+* YearsAtCompany vs. YearsInCurrentRole (77.61% correlation)
+* YearsAtCompany vs. YearsWithCurrManager (76.52% correlation
+* YearsWithCurrManager vs. YearsInCurrentRole (70.95% correlation)
+
+
+# Model Building and Validation
+## 1.  Logistic Regression
+
+Binomial logistic regression is a special form of mutiple regression that is used to model a dichotomous outcome. In our case, this outcome is whether an employee left the company or is still a current employee.
+
+The first model will use all available continuous and categorical variables - that is, fitting a full model. Some variables must be left out as they do not have any variability and will cause the model fitting to error. These varables are: EmployeeCount, StandardHours, and Over18. For more information on these variables please review the Exploratory Data Analysis section.
+
+The model will be fitted on 80% of the data selected at random from the raw data. The remaining 20% will be used to assess the prediction capability.
+
+
+```{r, echo=TRUE, fig.width=6}
+
+employee_logistic <- employee
+dropcolumns <- c("EmployeeCount", "StandardHours", "Over18") 
+employee_logistic <- employee_logistic[,!(colnames(employee_logistic) %in% dropcolumns)]
+employee_logistic$Attrition <- as.numeric(as.factor(employee_logistic$Attrition))
+employee_logistic$Attrition[employee_logistic$Attrition == 2] <- 0
+employee_logistic$Attrition <- as.factor(employee_logistic$Attrition)
+# split the raw data into testing and training data
+set.seed(50) # set seed so that same sample can be reproduced in future
+# now selecting 80% of data as sample from total 'n' rows of the data  
+sample <- sample.int(n=nrow(employee_logistic), size=floor(.80*nrow(employee_logistic)), replace=FALSE)
+# subset the data using the sample integer vector created above
+train <- employee_logistic[sample, ]
+test  <- employee_logistic[-sample, ]
+# fitting the binomial logistic regression model, Attrition is dependent, fitting using all features
+model <- glm(train$Attrition ~., family=binomial(link='logit'),data=train)
+summary(model)
+
+```
+
+We will now test the predictive capablity of this full model.
+```{r, echo=TRUE}
+# predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
+fittedresults <- predict(model, newdata=test, type='response')
+# if P(y=1|X) > 0.5 then y = 1 otherwise y=0
+fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+# calculate the mean of the fitted results that don't equal the observed result - IGNORE NAs
+misClasificError <- mean(fittedresults != test$Attrition, na.rm=TRUE) # this adds up all the instances of misclassification then divides by total (via mean)
+# print the output as 100% - error
+print(paste('Accuracy',1-misClasificError))
+```
+
+The model already exhibits very high predictive capability (> 83%), but we will now refit the model using only variables with signficance from the full model. This is done to simplify the model for interpretation and to reduce potential multicolinearity issues.
+
+The model will be fit with the following features:
+
+Age<br>
+BusinessTravel<br>
+DistanceFromHome<br>
+EnvironmentSatisfaction<br>
+JobInvolvement<br>
+JobRole<br>
+JobSatisfaction<br>
+MaritalStatus<br>
+NumCompaniesWorked<br>
+OverTime<br>
+RelationshipSatisfaction<br>
+TotalWorkingYears<br>
+TrainingTimesLastYear<br>
+WorkLifeBalance<br>
+YearsInCurrentRole<br>
+YearsSinceLastPromotion<br>
+YearsWithCurrManager
+
+```{r, echo=TRUE}
+keepcolumns <- c("Age", "BusinessTravel", "DistanceFromHome", "EnvironmentSatisfaction",
+"JobInvolvement", "JobRole", "JobSatisfaction", "MaritalStatus",
+"NumCompaniesWorked", "OverTime", "RelationshipSatisfaction",
+"TotalWorkingYears", "TrainingTimesLastYear", "WorkLifeBalance",
+"YearsInCurrentRole", "YearsSinceLastPromotion",
+"YearsWithCurrManager", "Attrition")
+employee_logistic <- employee_logistic[,(colnames(employee_logistic) %in% keepcolumns)]
+set.seed(50)
+sample <- sample.int(n=nrow(employee_logistic), size=floor(.80*nrow(employee_logistic)), replace=FALSE)
+train <- employee_logistic[sample, ]
+test  <- employee_logistic[-sample, ]
+model <- glm(train$Attrition ~., family=binomial(link='logit'),data=train)
+summary(model)
+anova(model, test="Chisq")
+```
+
+We will now test the predictive capablity of this reduced model.
+```{r, echo=TRUE}
+# predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
+fittedresults <- predict(model, newdata=test, type='response')
+fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+misClasificError <- mean(fittedresults != test$Attrition, na.rm=TRUE)  
+print(paste('Logistic Regression Accuracy',1-misClasificError))
+```
+
+
+The predictive capability of this reduced model improved slightly to 86.02% and has now been simplifed quite a bit in terms of the number of features.
+
+### Using GLMNET and Cross-Validation for Feature Selection of Logistic Regression
+
+Our earlier approach was to intuitively select features from the data that represented statistical and practical significance to the question of interest. In this section we will employ an automated feature selection tool that leverages LASSO (Least Absolute Shrinkage and Selection Operator) and cross-validation to select important features in the model. 
+
+```{r, echo=TRUE}
+employee_logistic <- employee
+dropcolumns <- c("EmployeeCount", "StandardHours", "Over18") 
+employee_logistic <- employee_logistic[,!(colnames(employee_logistic) %in% dropcolumns)]
+employee_logistic$Attrition <- as.numeric(as.factor(employee_logistic$Attrition))
+employee_logistic$Attrition[employee_logistic$Attrition == 2] <- 0
+employee_logistic$Attrition <- as.factor(employee_logistic$Attrition)
+
+set.seed(50)   
+sample <- sample.int(n=nrow(employee_logistic), size=floor(.80*nrow(employee_logistic)), replace=FALSE)
+train <- employee_logistic[sample, ]
+test  <- employee_logistic[-sample, ]
+
+GLMTrain.y <- train$Attrition
+GLMTrain.y <- as.factor(as.character(GLMTrain.y))
+GLMTrain.x <- train[,!(colnames(train) == "Attrition")]
+
+GLMTrain.xfactors <- model.matrix(GLMTrain.y ~ GLMTrain.x$BusinessTravel + GLMTrain.x$Department + GLMTrain.x$EducationField + GLMTrain.x$Gender + GLMTrain.x$JobRole + GLMTrain.x$MaritalStatus + GLMTrain.x$OverTime)[, -1]
+
+dropcolumns <- c("BusinessTravel", "Department", "EducationField", "Gender", "JobRole", "MaritalStatus", "OverTime") 
+GLMTrain.x <- GLMTrain.x[,!(colnames(GLMTrain.x) %in% dropcolumns)]
+# combine GLMTrain.x continuous variables with GLMTrain.xfactors dummy variable matrix, then converting whole thing to a matrix for glmnet
+GLMTrain.x <- as.matrix(data.frame(GLMTrain.x, GLMTrain.xfactors))
+# use glmnet to fit a binomial logistic regression
+
+fit.lasso=glmnet(GLMTrain.x,GLMTrain.y,family = "binomial")
+plot(fit.lasso,xvar="lambda",label=TRUE)
+
+cv.lasso <- cv.glmnet(GLMTrain.x, GLMTrain.y, family = "binomial", alpha=1, type.measure = "class")
+plot(cv.lasso)
+```
+
+As it can be seen from the plot of missicasfication error, a lambda value of -5 gives us the best result,i.e we use this value to fit the model.
+
+``` {r, echo=TRUE}
+# predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
+fittedresults <- predict(model, newdata=test, type='response')
+
+# if P(y=1|X) > 0.5 then y = 1 otherwise y=0
+fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+
+# calculate the mean of the fitted results that don't equal the observed result - IGNORE NAs
+misClasificError <- mean(fittedresults != test$Attrition, na.rm=TRUE) # this adds up all the instances of misclassification then divides by total (via mean)
+
+# print the output as 100% - error
+print(paste('Accuracy',1-misClasificError))
+
+```
+
+
+This model exhibits less predictive capability on the hold out test set (86.39% accuracy). For this reason, we will use the reduced model as our final recommendation for predicting attrition. These features included:
+Age
+BusinessTravel
+DistanceFromHome
+EnvironmentSatisfaction
+Gender 
+JobInvolvement
+JobRole
+JobSatisfaction
+MaritalStatus
+NumCompaniesWorked
+OverTime
+RelationshipSatisfaction
+TotalWorkingYears
+TrainingTimesLastYear
+WorkLifeBalance
+YearsAtCompany
+YearsInCurrentRole
+YearsSinceLastPromotion
+YearsWithCurrManager
+
+
+#### ROC Curve for our Final (Reduced) Predictive Model
+
+An ROC curve is a graphical plot that illustrates the diagnostic ability of a binary classifier system like our logistic regression model. The curve is created by plotting the true positive rate (TPR) against the false positive rate (FPR)
+
+```{r, echo=TRUE}
+#Create ROC curves
+pr <- prediction(fittedresults, test$Attrition)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+#Ref line indicating poor performance, 50/50
+abline(a=0, b= 1)
+
+# calculate area under curve (AUC)
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+
+# print AUC onto plot
+text(x = .40, y = .6,paste("AUC = ", round(auc,3), sep = ""))
+```
+
+## 2. KNN model
+``` {r}
+employee_logistic$ID <- NULL
+
+sample <- sample.int(n=nrow(employee_logistic), size=floor(.80*nrow(employee_logistic)), replace=FALSE)
+train <- employee_logistic[sample, ]
+test  <- employee_logistic[-sample, ]
+
+splitRule <- trainControl(method = "repeatedcv", number = 10, repeats = 3, search="random")
+set.seed(777)
+knn_fit <- train(Attrition ~ ., data = train, method = "knn",trControl=splitRule,preProcess = c("center", "scale"), tuneLength = 10)
+
+knn_fit
+
+```
+
+``` {r}
+test_pred <- predict(knn_fit, newdata =test)
+View(data.frame(test_pred, test$Attrition))
+table(test_pred)
+
+```
+
+## 3. Random forest
+### 3.1. Random forset for Attrition
+``` {r}
+rfModel <- randomForest(train$Attrition ~., data=train, mtry = 3, ntree = 500, nodesize = 0.01*nrow(test))
+
+print(rfModel)
+predictrftree <- predict(rfModel,test,type = "class")
+table(predictrftree,test$Attrition)
+```
+
+``` {r}
+# Make predictions on the test set
+pred_rf <- predict(rfModel, newdat=test)
+caret::confusionMatrix(pred_rf, test$Attrition)
+plot(rfModel)
+```
+
+##Variable importance plots
+Use the variable_importance() explainer to present importance of particular features. Note that type = "difference" normalizes dropouts, and now they all start in 0.
+
+```{r}
+explain_Attrition_rf <- explain(rfModel, 
+                      data = train[,-2],
+                      y = train$Attrition == "yes", 
+                      label = "Random Forest v7",
+                      colorize = FALSE)
+```
+
+```{r}
+vi_rf <- variable_importance(explain_Attrition_rf)
+head(vi_rf)
+plot(vi_rf)
+
+```
+
+```{r}
+# my_tree_two and test are available in the workspace
+#my_submission <- data_frame('Id' = test$ID, 'Employee_Attrition' = pred_rf)
+# Finish the data.frame() call
+#write.csv(my_submission, file = "Case2PredictionsAberaAttrition.csv", row.names = FALSE)
+```
+
+Random Forest AUC
+```{r}
+predict_rf_ROC <- predict(rfModel, test, type="prob")
+pred_rf <- prediction(predict_rf_ROC[,2], test$Attrition)
+perf_rf <- performance(pred_rf, "tpr", "fpr")
+
+auc_rf <- performance(pred_rf,"auc")
+auc_rf <- round(as.numeric(auc_rf@y.values),3)
+
+plot(perf_rf, main = "ROC curves for the models", col='blue')
+
+print(paste('AUC of Random Forest:',auc_rf))
+
+```
+
+The AUC curve was also good with the value of 85.2%.
+#Conclusion
+The random forest model is 85.2
+Overall for this stimulated dataset Random Forest seems to be the best model with the highest area under curve of 85.2%.
+
+### 3.2. Model for Random forest for monthly income
+
+```{r}
+#MonthlyIncome
+rf_model_monthly <- randomForest(train$ MonthlyIncome ~., data=train, mtry = 3, ntree = 500, nodesize = 0.01*nrow(test))
+
+print(rf_model_monthly)
+
+predictrftree <- predict(rf_model_monthly,test,type = "class")
+#table(predictrftree,test$MonthlyIncome)
+
+pred_rf2 <- predict(rf_model_monthly, newdat=test)
+plot(rf_model_monthly)
+```
+
+``` {r}
+# my_tree_two and test are available in the workspace
+#my_submission <- data_frame('Id' = test$ID, 'Employee_MonthlyIncome' = pred_rf2)
+# Finish the data.frame() call
+#write.csv(my_submission, file = "Case2PredictionsAberaSalary.csv", row.names = FALSE)
+```
+
+```{r}
+myControl = trainControl(method = "cv", number = 5, verboseIter = FALSE)
+rf_model_monthly = train(MonthlyIncome ~ ., 
+                 data = train,
+                 tuneLength = 2,
+                 method = "ranger",
+                 importance = 'impurity',
+                 trControl = myControl)
+rf_model_monthly
+
+```
+
+JobInvolvement                        18.78      62.32    0.30              0.76328    
+JobLevel                            2762.49      97.63   28.30 < 0.0000000000000002 ***
+JobRoleHuman Resources`            -295.15     610.80   -0.48              0.62910    
+JobRoleLaboratory Technician`      -657.18     201.26   -3.27              0.00115 ** 
+JobRoleManager                      4279.90     335.64   12.75 < 0.0000000000000002 ***
+JobRoleManufacturing Director`      262.33     199.19    1.32              0.18831    
+JobRoleResearch Director`          3998.51     255.38   15.66 < 0.0000000000000002 ***
+TotalWorkingYears                     45.96      12.72    3.61              0.00033 ***
+
+## Conclusion
+This paper was motivated by the need for research that could reduce the attrition rate in an industry, therby incrementing the productivity. The unique contribution of this paper is that we investigated the attributes which majorly contribute in the attrition. We found that parameters such as Overtime, Gender, Previous Work Experience, Environmental Satisfaction are some of the parameters, which show strong association with attrition, positively or negatively.
+
+##  Appendix : Online Resources
+
+https://www.analyticsvidhya.com/blog/2015/11/beginners-guide-on-logistic-regression-in-r/
+
+https://rpubs.com/bpr1989/HRAnalysis
+
+http://rpubs.com/SameerMathur/HTNF
+
+http://recruitloop.com/blog/7-ways-reduce-employee-attrition/
+
+https://rpubs.com/CJ_09/Emp_Attrition_Final
+
+Text book
+
+https://www.kaggle.com/pavansubhasht/ibm-hr-analytics-attrition-dataset/data
